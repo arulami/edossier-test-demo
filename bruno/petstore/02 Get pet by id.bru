@@ -1,0 +1,30 @@
+meta {
+  name: Get pet by id
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/pet/{{petId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+assert {
+  res.status: eq 200
+  res.body.category.name: eq Dogs
+}
+
+tests {
+  test("has the fields the UI relies on", function () {
+    const body = res.getBody();
+    expect(body).to.have.property("id");
+    expect(body).to.have.property("name");
+    expect(body.photoUrls).to.be.an("array");
+    expect(["available", "pending", "sold"]).to.include(body.status);
+  });
+}

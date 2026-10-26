@@ -1,0 +1,13 @@
+{
+  "name": "edossier-demo-cypress",
+  "private": true,
+  "scripts": {
+    "cy:open": "cypress open",
+    "cy:run": "cypress run",
+    "cy:run:ui": "cypress run --spec 'cypress/e2e/saucedemo/**'",
+    "cy:run:petstore": "cypress run --spec 'cypress/e2e/petstore/**'"
+  },
+  "devDependencies": {
+    "cypress": "^13.13.0"
+  }
+}

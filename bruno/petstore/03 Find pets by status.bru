@@ -1,0 +1,30 @@
+meta {
+  name: Find pets by status
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/pet/findByStatus?status=available
+  body: none
+  auth: none
+}
+
+params:query {
+  status: available
+}
+
+headers {
+  Accept: application/json
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("list contains the new pet", function () {
+    const ids = res.getBody().map(p => p.id);
+    expect(ids).to.include(Number(bru.getEnvVar("petId")));
+  });
+}

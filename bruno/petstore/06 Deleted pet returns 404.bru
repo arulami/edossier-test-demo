@@ -1,0 +1,19 @@
+meta {
+  name: Deleted pet returns 404
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/pet/{{petId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+assert {
+  res.status: eq 404
+}

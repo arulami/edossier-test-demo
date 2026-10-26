@@ -1,0 +1,30 @@
+meta {
+  name: Mark pet sold
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/pet
+  body: json
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+body:json {
+  {
+    "id": {{petId}},
+    "name": "Rex",
+    "category": { "id": 1, "name": "Dogs" },
+    "photoUrls": ["https://example.org/rex.jpg"],
+    "status": "sold"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq sold
+}

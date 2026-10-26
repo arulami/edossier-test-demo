@@ -1,0 +1,179 @@
+# Azure DevOps pipeline: fast feedback first, slower and costlier checks later.
+#
+#   Build + fast tests ─► Serenity API/BDD + Bruno ─┬─► UI (Cypress)
+#   (Pact, WireMock, SQL)                           └─► Performance smoke (k6)
+#
+# Every stage publishes JUnit XML to the run's "Tests" tab; reports are published as artifacts
+# (Serenity living documentation, Pact contract, k6 summary).
+#
+# To try it: create a free Azure DevOps organisation, push this repo, New pipeline → "Existing Azure
+# Pipelines YAML file" → /azure-pipelines.yml. Microsoft-hosted ubuntu agents include Docker, JDK 21 and Node.
+
+trigger:
+  branches:
+    include: [ main ]
+
+pr:
+  branches:
+    include: [ main ]
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  MAVEN_CACHE_FOLDER: $(Pipeline.Workspace)/.m2/repository
+  MAVEN_OPTS: -Dmaven.repo.local=$(MAVEN_CACHE_FOLDER)
+  PETSTORE_BASE_URL: http://localhost:8080/api/v3
+
+stages:
+  # ---------------------------------------------------------------------------
+  - stage: Build
+    displayName: Build and fast tests
+    jobs:
+      - job: fast
+        displayName: Compile + Pact, WireMock and SQL tests
+        steps:
+          - task: JavaToolInstaller@0
+            inputs:
+              versionSpec: '21'
+              jdkArchitectureOption: x64
+              jdkSourceOption: PreInstalled
+
+          - task: Cache@2
+            displayName: Cache Maven repository
+            inputs:
+              key: 'maven | "$(Agent.OS)" | pom.xml'
+              path: $(MAVEN_CACHE_FOLDER)
+
+          - script: mvn -B $(MAVEN_OPTS) test
+            displayName: mvn test (no external system needed)
+
+          - task: PublishTestResults@2
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              testRunTitle: Fast tests
+
+          - publish: target/pacts
+            artifact: pact-contracts
+            displayName: Publish Pact contract file
+            condition: succeededOrFailed()
+
+  # ---------------------------------------------------------------------------
+  - stage: Api
+    displayName: Serenity API + BDD, Bruno
+    dependsOn: Build
+    jobs:
+      - job: api
+        steps:
+          - script: |
+              docker compose up -d petstore
+              for i in $(seq 1 60); do
+                curl -sf "$(PETSTORE_BASE_URL)/openapi.json" > /dev/null && echo "Petstore is up" && exit 0
+                sleep 2
+              done
+              echo "Petstore did not start" && docker compose logs petstore && exit 1
+            displayName: Start system under test
+
+          - task: JavaToolInstaller@0
+            inputs:
+              versionSpec: '21'
+              jdkArchitectureOption: x64
+              jdkSourceOption: PreInstalled
+
+          - task: Cache@2
+            inputs:
+              key: 'maven | "$(Agent.OS)" | pom.xml'
+              path: $(MAVEN_CACHE_FOLDER)
+
+          - script: mvn -B $(MAVEN_OPTS) verify -Dpetstore.baseUrl=$(PETSTORE_BASE_URL)
+            displayName: mvn verify (Serenity REST + Screenplay/Cucumber, then serenity:check)
+
+          - task: PublishTestResults@2
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: '**/failsafe-reports/TEST-*.xml'
+              testRunTitle: Serenity API and BDD tests
+
+          - publish: target/site/serenity
+            artifact: serenity-report
+            displayName: Publish Serenity living documentation
+            condition: succeededOrFailed()
+
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '20.x'
+
+          - script: |
+              cd bruno/petstore
+              npx --yes @usebruno/cli@latest run --env local --reporter-junit $(System.DefaultWorkingDirectory)/bruno-results.xml
+            displayName: Bruno collection
+
+          - task: PublishTestResults@2
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: bruno-results.xml
+              testRunTitle: Bruno API collection
+
+  # ---------------------------------------------------------------------------
+  - stage: Ui
+    displayName: UI end-to-end (Cypress)
+    dependsOn: Api
+    jobs:
+      - job: cypress
+        steps:
+          - script: docker compose up -d petstore
+            displayName: Start system under test
+
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '20.x'
+
+          - script: |
+              cd cypress
+              npm ci || npm install
+              npx cypress run
+            displayName: Cypress run
+
+          - task: PublishTestResults@2
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: cypress/results/*.xml
+              mergeTestResults: true
+              testRunTitle: Cypress E2E
+
+          - publish: cypress/cypress/screenshots
+            artifact: cypress-screenshots
+            condition: failed()
+
+  # ---------------------------------------------------------------------------
+  - stage: Performance
+    displayName: Performance smoke (k6)
+    dependsOn: Api
+    jobs:
+      - job: k6
+        steps:
+          - script: |
+              docker compose up -d petstore influxdb
+              for i in $(seq 1 60); do curl -sf "$(PETSTORE_BASE_URL)/openapi.json" > /dev/null && exit 0; sleep 2; done; exit 1
+            displayName: Start system under test
+
+          - script: |
+              mkdir -p k6/results && chmod 777 k6/results
+              docker compose run --rm k6 run -e PROFILE=smoke /scripts/petstore-load.js
+            displayName: k6 smoke load (thresholds fail the stage)
+
+          - task: PublishTestResults@2
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: k6/results/k6-junit.xml
+              testRunTitle: k6 thresholds
+
+          - publish: k6/results
+            artifact: k6-results
+            condition: succeededOrFailed()

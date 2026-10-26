@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>demo.edossier</groupId>
+  <artifactId>edossier-test-demo</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <name>eDossier test automation demo</name>
+  <description>Serenity BDD REST + Screenplay, Pact, WireMock, SQL checks, Bruno, Cypress, k6 and Grafana</description>
+
+  <!--
+    Two kinds of tests:
+      mvn test     -> fast, self-contained tests (Pact, WireMock, SQL). Surefire. No server needed.
+      mvn verify   -> also runs the Serenity BDD REST tests against the running Petstore (Failsafe)
+                      and builds the Serenity living-documentation report in target/site/serenity
+  -->
+
+  <properties>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+    <!-- Base URL of the system under test (local Petstore container by default) -->
+    <petstore.baseUrl>http://localhost:8080/api/v3</petstore.baseUrl>
+
+    <serenity.version>5.4.1</serenity.version>
+    <!-- Keep this in line with the Cucumber version Serenity brings in:
+         mvn dependency:tree -Dincludes=io.cucumber -->
+    <cucumber.version>7.20.1</cucumber.version>
+    <junit.version>5.11.4</junit.version>
+    <assertj.version>3.26.3</assertj.version>
+    <jackson.version>2.18.2</jackson.version>
+    <swagger.validator.version>2.43.0</swagger.validator.version>
+    <wiremock.version>3.10.0</wiremock.version>
+    <pact.version>4.6.15</pact.version>
+    <h2.version>2.3.232</h2.version>
+    <surefire.version>3.5.2</surefire.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- Keeps every JUnit 5 artifact (jupiter, platform, suite) on one version -->
+      <dependency>
+        <groupId>org.junit</groupId>
+        <artifactId>junit-bom</artifactId>
+        <version>${junit.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!-- Production code: the small HTTP client exercised by the Pact and WireMock tests -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+
+    <!-- ===== Serenity BDD ===== -->
+    <dependency>
+      <groupId>net.serenity-bdd</groupId>
+      <artifactId>serenity-core</artifactId>
+      <version>${serenity.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.serenity-bdd</groupId>
+      <artifactId>serenity-junit5</artifactId>
+      <version>${serenity.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.serenity-bdd</groupId>
+      <artifactId>serenity-rest-assured</artifactId>
+      <version>${serenity.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.serenity-bdd</groupId>
+      <artifactId>serenity-screenplay</artifactId>
+      <version>${serenity.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.serenity-bdd</groupId>
+      <artifactId>serenity-screenplay-rest</artifactId>
+      <version>${serenity.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.serenity-bdd</groupId>
+      <artifactId>serenity-cucumber</artifactId>
+      <version>${serenity.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Cucumber on the JUnit 5 platform -->
+    <dependency>
+      <groupId>io.cucumber</groupId>
+      <artifactId>cucumber-junit-platform-engine</artifactId>
+      <version>${cucumber.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-suite</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <version>${assertj.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- OpenAPI contract validation, plugged into SerenityRest as a RestAssured filter -->
+    <dependency>
+      <groupId>com.atlassian.oai</groupId>
+      <artifactId>swagger-request-validator-restassured</artifactId>
+      <version>${swagger.validator.version}</version>
+      <scope>test</scope>
+      <exclusions>
+        <!-- use the RestAssured version that Serenity ships with -->
+        <exclusion>
+          <groupId>io.rest-assured</groupId>
+          <artifactId>rest-assured</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <!-- Mocking / service virtualisation (shaded jar avoids Jetty conflicts) -->
+    <dependency>
+      <groupId>org.wiremock</groupId>
+      <artifactId>wiremock-standalone</artifactId>
+      <version>${wiremock.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Consumer-driven contract testing -->
+    <dependency>
+      <groupId>au.com.dius.pact.consumer</groupId>
+      <artifactId>junit5</artifactId>
+      <version>${pact.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- SQL data-integrity checks on an in-memory database -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <version>${h2.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Fast tests: *Test.java (Pact, WireMock, SQL) -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>${surefire.version}</version>
+      </plugin>
+
+      <!-- Serenity REST tests against the live service: When*.java (JUnit 5) + CucumberTestSuite -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>${surefire.version}</version>
+        <configuration>
+          <includes>
+            <include>**/When*.java</include>
+            <include>**/CucumberTestSuite.java</include>
+          </includes>
+          <systemPropertyVariables>
+            <petstore.baseUrl>${petstore.baseUrl}</petstore.baseUrl>
+          </systemPropertyVariables>
+          <!-- let the Serenity report be generated even when tests fail; serenity:check fails the build afterwards -->
+          <testFailureIgnore>true</testFailureIgnore>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Builds target/site/serenity/index.html, then fails the build if any Serenity test failed -->
+      <plugin>
+        <groupId>net.serenity-bdd.maven.plugins</groupId>
+        <artifactId>serenity-maven-plugin</artifactId>
+        <version>${serenity.version}</version>
+        <executions>
+          <execution>
+            <id>serenity-reports</id>
+            <phase>post-integration-test</phase>
+            <goals>
+              <goal>aggregate</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>serenity-check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -1,0 +1,41 @@
+meta {
+  name: Create pet
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/pet
+  body: json
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+body:json {
+  {
+    "id": {{petId}},
+    "name": "Rex",
+    "category": { "id": 1, "name": "Dogs" },
+    "photoUrls": ["https://example.org/rex.jpg"],
+    "status": "available"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.name: eq Rex
+  res.body.status: eq available
+}
+
+tests {
+  test("returns the id we sent", function () {
+    expect(res.getBody().id).to.equal(Number(bru.getEnvVar("petId")));
+  });
+
+  test("responds quickly", function () {
+    expect(res.getResponseTime()).to.be.below(1000);
+  });
+}

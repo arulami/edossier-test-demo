@@ -1,0 +1,13 @@
+target/
+*.iml
+.idea/
+.vscode/
+node_modules/
+cypress/results/
+cypress/cypress/screenshots/
+cypress/cypress/videos/
+k6/results/*
+!k6/results/.gitkeep
+bruno-results.xml
+k6/node_modules/
+.DS_Store
