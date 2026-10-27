@@ -25,17 +25,22 @@
     <petstore.baseUrl>http://localhost:8080/api/v3</petstore.baseUrl>
 
     <serenity.version>5.4.1</serenity.version>
-    <!-- Keep this in line with the Cucumber version Serenity brings in:
-         mvn dependency:tree -Dincludes=io.cucumber -->
-    <cucumber.version>7.20.1</cucumber.version>
-    <junit.version>5.11.4</junit.version>
+    <!-- Must match the cucumber-core version Serenity brings in (Serenity 5.4.1 -> Cucumber 8.0.4).
+         Check with: mvn dependency:tree -Dincludes=io.cucumber -->
+    <cucumber.version>8.0.4</cucumber.version>
+    <!-- Must match Serenity's byte-buddy-agent (Serenity 5.4.1 -> 1.18.5). An older byte-buddy
+         (e.g. from AssertJ) breaks SerenityRest: "Could not initialize class RestSpecificationFactory" -->
+    <bytebuddy.version>1.18.5</bytebuddy.version>
+    <!-- Must match what Serenity 5.4.1 and Cucumber 8 are built on (JUnit 6.1.3).
+         Check with: mvn dependency:tree -Dincludes=org.junit.platform,org.junit.jupiter -Dverbose -->
+    <junit.version>6.1.3</junit.version>
     <assertj.version>3.26.3</assertj.version>
     <jackson.version>2.18.2</jackson.version>
     <swagger.validator.version>2.43.0</swagger.validator.version>
     <wiremock.version>3.10.0</wiremock.version>
     <pact.version>4.6.15</pact.version>
     <h2.version>2.3.232</h2.version>
-    <surefire.version>3.5.2</surefire.version>
+    <surefire.version>3.5.4</surefire.version>
   </properties>
 
   <dependencyManagement>
@@ -47,6 +52,17 @@
         <version>${junit.version}</version>
         <type>pom</type>
         <scope>import</scope>
+      </dependency>
+      <!-- One ByteBuddy version for everyone (Serenity, AssertJ, Pact) -->
+      <dependency>
+        <groupId>net.bytebuddy</groupId>
+        <artifactId>byte-buddy</artifactId>
+        <version>${bytebuddy.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>net.bytebuddy</groupId>
+        <artifactId>byte-buddy-agent</artifactId>
+        <version>${bytebuddy.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -163,11 +179,18 @@
 
   <build>
     <plugins>
-      <!-- Fast tests: *Test.java (Pact, WireMock, SQL) -->
+      <!-- Fast tests: *Test.java (Pact, WireMock, SQL). Cucumber runs only in Failsafe, so keep the
+           Cucumber and Suite engines out of Surefire (otherwise Surefire tries to discover the features too) -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>${surefire.version}</version>
+        <configuration>
+          <excludeJUnit5Engines>
+            <excludeJUnit5Engine>cucumber</excludeJUnit5Engine>
+            <excludeJUnit5Engine>junit-platform-suite</excludeJUnit5Engine>
+          </excludeJUnit5Engines>
+        </configuration>
       </plugin>
 
       <!-- Serenity REST tests against the live service: When*.java (JUnit 5) + CucumberTestSuite -->

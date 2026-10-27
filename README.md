@@ -131,6 +131,7 @@ public class WhenManagingPets {
 - Each `@Step` method in `PetApi` becomes a report line.
 - Calls go through `SerenityRest`, so the report shows the exact request and response under each step.
 - The `OpenApiValidationFilter` validates every call against the published spec. A renamed field, a wrong type or an undocumented status code fails the test even when the functional assertion passes.
+- **Known contract deviations** are recorded as narrowly scoped whitelist rules in `PetApi.knownDeviations()`, so everything else stays validated and any *new* deviation still fails the build. Current entry: **KNOWN-1**, `DELETE /pet/{petId}` returns `200` but the spec documents no 200 response for that operation (found by the validator).
 
 **b) Screenplay + Cucumber** (`demo/screenplay/` + `features/pets/pet_lifecycle.feature`):
 
@@ -296,6 +297,7 @@ docker compose down        # add -v to also delete the stored k6 metrics
 | `serenity:check` fails the build | A Serenity test failed. Open `target/site/serenity/index.html` for the failing step and its REST details. |
 | A Petstore response fails OpenAPI validation | The demo service occasionally drifts from its own spec. Treat it as a real contract finding. |
 | `The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8)` (Apple Silicon) | The Petstore image is Intel/AMD-only; `docker-compose.yml` already sets `platform: linux/amd64`. In Docker Desktop → Settings → General, enable **Use Rosetta for x86_64/amd64 emulation on Apple Silicon**. The other images run natively on ARM. |
+| Tests suddenly get `500` on `POST /pet` or `GET /pet/findByStatus` after a k6 stress or spike run | Petstore's in-memory store does not recover from heavy concurrent writes. Restart it: `docker compose restart petstore`. Run functional tests before stress tests. |
 | Port 8080, 3000 or 8086 already in use | Change the left-hand port in `docker-compose.yml` and pass `-Dpetstore.baseUrl=...` / `-e BASE_URL=...` |
 | Grafana dashboard is empty | Make sure k6 ran with the InfluxDB output (the Docker Compose route does this automatically), and widen the time range |
 | k6 in Docker cannot write `results/` (Linux hosts) | `chmod 777 k6/results` |
